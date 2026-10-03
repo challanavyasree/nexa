@@ -90,6 +90,7 @@ export interface DocumentItem {
   rawText: string;
   extractedInfo: ExtractedInfo;
   isDemo?: boolean;
+  _rawFile?: File;
 }
 
 export interface SourceEvidence {

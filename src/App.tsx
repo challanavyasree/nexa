@@ -15,6 +15,8 @@ import { ReviewView } from './components/ReviewView';
 import { TemporaryView } from './components/TemporaryView';
 import { ApiKeyModal } from './components/ApiKeyModal';
 
+import { processUploadedFile, extractStructuredInfoFromText } from './services/documentProcessor';
+
 export const App: React.FC = () => {
   // Navigation & Projects
   const [activePage, setActivePage] = useState<PageType>('dashboard');
@@ -63,12 +65,34 @@ export const App: React.FC = () => {
 
   // Settings Modal State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const envApiKey = (import.meta as any).env?.VITE_OPENAI_API_KEY || (import.meta as any).env?.VITE_LLM_API_KEY || '';
   const [apiSettings, setApiSettings] = useState<ApiSettings>({
-    apiKey: '',
-    provider: 'mock',
-    modelName: 'mock-engine',
+    apiKey: envApiKey,
+    provider: envApiKey ? 'openai' : 'mock',
+    modelName: envApiKey ? 'gpt-4o-mini' : 'mock-engine',
     apiUrl: 'http://localhost:8000'
   });
+
+  const handleSaveApiSettings = async (newSettings: ApiSettings) => {
+    console.log('Vision API configured:', Boolean(newSettings.apiKey));
+    setApiSettings(newSettings);
+
+    if (activeDocument?._rawFile) {
+      try {
+        const { text, fileType } = await processUploadedFile(activeDocument._rawFile, newSettings);
+        const extractedInfo = extractStructuredInfoFromText(text, fileType, activeDocument.name);
+        const updatedDoc: DocumentItem = {
+          ...activeDocument,
+          rawText: text,
+          extractedInfo
+        };
+        setActiveDocument(updatedDoc);
+        setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
+      } catch (err) {
+        console.error('Failed to reprocess image document:', err);
+      }
+    }
+  };
 
   // Action: Create New Project (Normal Flow)
   const handleCreateProject = (newProj: Project) => {
@@ -379,7 +403,7 @@ export const App: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         apiSettings={apiSettings}
-        onSaveSettings={setApiSettings}
+        onSaveSettings={handleSaveApiSettings}
       />
     </div>
   );

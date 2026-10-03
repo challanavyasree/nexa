@@ -92,7 +92,8 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
         uploadTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         status: 'processed',
         rawText: text,
-        extractedInfo
+        extractedInfo,
+        _rawFile: file
       };
 
       setUploadedDoc(newDoc);
