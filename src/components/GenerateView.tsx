@@ -24,6 +24,7 @@ interface GenerateViewProps {
   onSelectDocument?: (doc: DocumentItem) => void;
   onCreateProject?: (proj: Project) => void;
   onNavigatePage?: (page: PageType) => void;
+  onOpenSettings?: () => void;
 }
 
 export const GenerateView: React.FC<GenerateViewProps> = ({
@@ -44,7 +45,8 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
   onAddDocument,
   onSelectDocument,
   onCreateProject,
-  onNavigatePage
+  onNavigatePage,
+  onOpenSettings
 }) => {
   // Creator, Audience & Content Context Forms
   const [creatorCtx, setCreatorCtx] = useState<CreatorContext>(DEFAULT_CREATOR_CONTEXT);
@@ -104,11 +106,19 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
     }
   };
 
+  const currentDoc = uploadedDoc || activeDocument;
+  const isImageUnavail = currentDoc?.fileType === 'image' && (currentDoc.rawText.includes('Visual understanding unavailable') || currentDoc.extractedInfo?.topic === 'Visual Analysis Unavailable');
+
   // Run AI Multi-Agent Generation
   const handleStartGeneration = async () => {
     const docToUse = uploadedDoc || activeDocument;
     if (!docToUse) {
       setGenerationError('No source document available for generation. Please upload a source document.');
+      return;
+    }
+
+    if (docToUse.fileType === 'image' && (docToUse.rawText.includes('Visual understanding unavailable') || docToUse.extractedInfo?.topic === 'Visual Analysis Unavailable')) {
+      setGenerationError('Image understanding is unavailable. Please configure a vision-capable AI API in API Config.');
       return;
     }
 
@@ -176,8 +186,6 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
     }
   };
 
-  const currentDoc = uploadedDoc || activeDocument;
-
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Top Banner */}
@@ -209,9 +217,9 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
 
           <button
             onClick={handleStartGeneration}
-            disabled={isGenerating || !currentDoc}
+            disabled={isGenerating || !currentDoc || isImageUnavail}
             className={`px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center space-x-2 cursor-pointer ${
-              isGenerating || !currentDoc
+              isGenerating || !currentDoc || isImageUnavail
                 ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                 : 'bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white shadow-indigo-500/25'
             }`}
@@ -231,23 +239,27 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
         </div>
       </div>
 
-      {/* Error Notification State */}
-      {generationError && (
-        <div className="p-4 rounded-2xl bg-rose-950/50 border border-rose-500/40 text-xs text-rose-200 flex items-center justify-between gap-3">
+      {/* Visual Analysis Unavailable Warning Banner */}
+      {isImageUnavail && (
+        <div className="p-4 rounded-2xl bg-amber-950/60 border border-amber-500/40 text-xs text-amber-200 flex items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
-            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
             <div>
-              <p className="font-bold text-rose-300">Pipeline Action Exception</p>
-              <p className="text-[11px] text-rose-200/90 mt-0.5">{generationError}</p>
+              <p className="font-bold text-amber-300">Image Visual Understanding Unavailable</p>
+              <p className="text-[11px] text-amber-200/90 mt-0.5">
+                Image visual analysis requires an active vision-capable API key. Please configure your API key in API Config.
+              </p>
             </div>
           </div>
-          <button
-            onClick={handleStartGeneration}
-            className="px-3 py-1.5 rounded-xl bg-rose-900/80 hover:bg-rose-800 text-white text-xs font-semibold flex items-center space-x-1 cursor-pointer border border-rose-700 shrink-0"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Retry</span>
-          </button>
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold border border-amber-500/40 flex items-center space-x-1.5 cursor-pointer shrink-0"
+            >
+              <Cpu className="w-3.5 h-3.5" />
+              <span>Configure API Config</span>
+            </button>
+          )}
         </div>
       )}
 
