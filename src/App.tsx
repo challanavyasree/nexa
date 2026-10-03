@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import type { AgentStatus, ApiSettings, AudienceContext, ContentContext, CreatorContext, DocumentItem, GeneratedOutput, IntentType, PageType, Project, TargetAudience, VerificationClaim } from './types';
+import React, { useState, useEffect } from 'react';
+import type { AgentStatus, ApiSettings, AudienceContext, ContentContext, CreatorContext, DocumentItem, GeneratedOutput, IntentType, PageType, Project, TargetAudience, TemporarySession, VerificationClaim } from './types';
 import { INITIAL_DEMO_DOCUMENT, INITIAL_PROJECTS, INITIAL_VERIFICATION_CLAIMS, generateSampleOutputs } from './services/sampleData';
 import { INITIAL_AGENTS } from './services/aiGenerator';
 import { verifyOutputConsistency } from './services/consistencyVerifier';
@@ -12,6 +12,7 @@ import { GenerateView } from './components/GenerateView';
 import { OutputsView } from './components/OutputsView';
 import { VerificationView } from './components/VerificationView';
 import { ReviewView } from './components/ReviewView';
+import { TemporaryView } from './components/TemporaryView';
 import { ApiKeyModal } from './components/ApiKeyModal';
 
 export const App: React.FC = () => {
@@ -20,9 +21,22 @@ export const App: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [activeProject, setActiveProject] = useState<Project>(INITIAL_PROJECTS[0]);
 
-  // Documents
+  // Documents & Active Selection
   const [documents, setDocuments] = useState<DocumentItem[]>([INITIAL_DEMO_DOCUMENT]);
   const [activeDocument, setActiveDocument] = useState<DocumentItem | null>(INITIAL_DEMO_DOCUMENT);
+
+  // Temporary Analysis Session State
+  const [temporarySession, setTemporarySession] = useState<TemporarySession | null>(null);
+
+  // 24-Hour Expiration Automated Check
+  useEffect(() => {
+    if (temporarySession) {
+      if (Date.now() > temporarySession.expiresAt) {
+        // Session expired after 24 hours -> clean up
+        setTemporarySession(null);
+      }
+    }
+  }, [temporarySession]);
 
   // Generation Parameters
   const [targetAudience, setTargetAudience] = useState<TargetAudience>('Management');
@@ -33,7 +47,7 @@ export const App: React.FC = () => {
   // Multi-Agent State
   const [agents, setAgents] = useState<AgentStatus[]>(INITIAL_AGENTS);
 
-  // Outputs
+  // Outputs & Claims
   const [outputs, setOutputs] = useState<GeneratedOutput[]>(() =>
     generateSampleOutputs(
       INITIAL_DEMO_DOCUMENT.id,
@@ -45,10 +59,9 @@ export const App: React.FC = () => {
     )
   );
 
-  // Verification Claims
   const [claims, setClaims] = useState<VerificationClaim[]>(INITIAL_VERIFICATION_CLAIMS);
 
-  // Settings Modal
+  // Settings Modal State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [apiSettings, setApiSettings] = useState<ApiSettings>({
     apiKey: '',
@@ -57,9 +70,11 @@ export const App: React.FC = () => {
     apiUrl: 'http://localhost:8000'
   });
 
-  // Action: Create New Project
+  // Action: Create New Project (Normal Flow)
   const handleCreateProject = (newProj: Project) => {
     setProjects(prev => [newProj, ...prev]);
+    setActiveProject(newProj);
+    setActivePage('projects');
   };
 
   // Action: Update Project Context Parameters
@@ -86,30 +101,56 @@ export const App: React.FC = () => {
     }
   };
 
-  // Action: Load Generic Demo Document & Outputs
-  const handleLoadDemoDoc = () => {
-    const exists = documents.find(d => d.id === INITIAL_DEMO_DOCUMENT.id);
-    if (!exists) {
-      setDocuments(prev => [INITIAL_DEMO_DOCUMENT, ...prev]);
+  // Action: Save Temporary Session As Permanent Project
+  const handleSaveTemporaryAsProject = (tempSession: TemporarySession, projName: string, projDesc: string) => {
+    const newProjId = `proj-${Date.now()}`;
+    const permDocId = tempSession.document ? `doc-${Date.now()}` : '';
+
+    let permanentDoc: DocumentItem | null = null;
+    if (tempSession.document) {
+      permanentDoc = {
+        ...tempSession.document,
+        id: permDocId,
+        projectId: newProjId,
+        isDemo: false
+      };
+      setDocuments(prev => [permanentDoc!, ...prev]);
+      setActiveDocument(permanentDoc);
     }
-    setActiveDocument(INITIAL_DEMO_DOCUMENT);
 
-    const demoOutputs = generateSampleOutputs(
-      INITIAL_DEMO_DOCUMENT.id,
-      activeProject.id,
-      INITIAL_DEMO_DOCUMENT.name,
-      activeProject.creatorContext,
-      activeProject.audienceContext,
-      activeProject.contentContext
-    );
-    setOutputs(demoOutputs);
+    const permanentOutputs = tempSession.outputs.map(out => ({
+      ...out,
+      id: `out-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      docId: permDocId,
+      projectId: newProjId
+    }));
+    setOutputs(permanentOutputs);
 
-    const demoClaims = demoOutputs.flatMap(o =>
-      verifyOutputConsistency(o, INITIAL_DEMO_DOCUMENT.rawText, INITIAL_DEMO_DOCUMENT.name)
-    );
-    setClaims(demoClaims);
+    const newProject: Project = {
+      id: newProjId,
+      name: projName,
+      description: projDesc,
+      createdAt: new Date().toISOString().split('T')[0],
+      creatorContext: tempSession.creatorContext,
+      audienceContext: tempSession.audienceContext,
+      contentContext: tempSession.contentContext,
+      documentIds: permanentDoc ? [permanentDoc.id] : [],
+      outputIds: permanentOutputs.map(o => o.id)
+    };
 
-    setActivePage('documents');
+    setProjects(prev => [newProject, ...prev]);
+    setActiveProject(newProject);
+
+    // Clear temporary session since it is now permanently saved
+    setTemporarySession(null);
+
+    // Redirect to Projects workspace
+    setActivePage('projects');
+  };
+
+  // Action: Continue Without Saving Temporary Session
+  const handleContinueWithoutSaving = () => {
+    setActivePage('dashboard');
   };
 
   // Action: Add Uploaded Document
@@ -223,13 +264,13 @@ export const App: React.FC = () => {
         {/* Topbar */}
         <Topbar
           currentDocument={activeDocument}
-          onLoadDemoDoc={handleLoadDemoDoc}
           onOpenSettings={() => setIsSettingsOpen(true)}
           activeProjectName={activeProject.name}
           setActiveProjectName={(name) => {
             const found = projects.find(p => p.name === name);
             if (found) setActiveProject(found);
           }}
+          projects={projects}
         />
 
         {/* Dynamic Page Views */}
@@ -239,10 +280,24 @@ export const App: React.FC = () => {
               documents={documents}
               outputs={outputs}
               claims={claims}
-              onStartNewAnalysis={() => setActivePage('documents')}
-              onLoadDemoDoc={handleLoadDemoDoc}
+              projects={projects}
+              onStartNewProject={() => setActivePage('projects')}
+              onOpenTemporaryAnalysis={() => setActivePage('temporary')}
               onNavigatePage={setActivePage}
-              onSelectDocument={setActiveDocument}
+              onSelectProject={setActiveProject}
+            />
+          )}
+
+          {activePage === 'temporary' && (
+            <TemporaryView
+              temporarySession={temporarySession}
+              onUpdateTemporarySession={setTemporarySession}
+              onSaveAsProject={handleSaveTemporaryAsProject}
+              onContinueWithoutSaving={handleContinueWithoutSaving}
+              onNavigatePage={setActivePage}
+              apiSettings={apiSettings}
+              agents={agents}
+              setAgents={setAgents}
             />
           )}
 
@@ -266,7 +321,7 @@ export const App: React.FC = () => {
               onSelectDocument={setActiveDocument}
               onAddDocument={handleAddDocument}
               onDeleteDocument={handleDeleteDocument}
-              onLoadDemoDoc={handleLoadDemoDoc}
+              onLoadDemoDoc={() => setActivePage('temporary')}
               onProceedToGenerate={() => setActivePage('generate')}
             />
           )}

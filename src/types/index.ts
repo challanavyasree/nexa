@@ -1,4 +1,4 @@
-export type PageType = 'dashboard' | 'projects' | 'documents' | 'generate' | 'outputs' | 'verification' | 'review';
+export type PageType = 'dashboard' | 'projects' | 'documents' | 'generate' | 'outputs' | 'verification' | 'review' | 'temporary';
 
 export type CreatorType = 'Student' | 'Working Professional' | 'Researcher' | 'Faculty/Educator' | 'Entrepreneur' | 'Organization/Team' | 'Other';
 
@@ -155,4 +155,16 @@ export interface ApiSettings {
   provider: 'mock' | 'openai' | 'gemini' | 'anthropic';
   modelName: string;
   apiUrl?: string;
+}
+
+export interface TemporarySession {
+  id: string;
+  createdAt: number;
+  expiresAt: number;
+  creatorContext: CreatorContext;
+  audienceContext: AudienceContext;
+  contentContext: ContentContext;
+  document: DocumentItem | null;
+  outputs: GeneratedOutput[];
+  claims: VerificationClaim[];
 }
