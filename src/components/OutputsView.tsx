@@ -15,10 +15,16 @@ export const OutputsView: React.FC<OutputsViewProps> = ({
   onProceedToVerification,
   onRegenerateOutput
 }) => {
-  const [activeTab, setActiveTab] = useState<OutputType>('briefing');
+  const [activeTab, setActiveTab] = React.useState<OutputType>(() => outputs[0]?.type || 'briefing');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState<string>('');
+
+  React.useEffect(() => {
+    if (outputs && outputs.length > 0) {
+      setActiveTab(outputs[0].type);
+    }
+  }, [outputs]);
 
   const currentOutput = outputs.find(o => o.type === activeTab) || outputs[0];
 
@@ -166,7 +172,7 @@ export const OutputsView: React.FC<OutputsViewProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Target: <span className="text-slate-200">{currentOutput.audience}</span> | Intent: <span className="text-slate-200">{currentOutput.intent}</span>
+                    Target: <span className="text-slate-200 font-semibold">{currentOutput.audience}</span> | Platform/Channel: <span className="text-slate-200 font-semibold">{currentOutput.platform}</span> | Tone: <span className="text-slate-200 font-semibold">{currentOutput.tone}</span> | Intent: <span className="text-slate-200 font-semibold">{currentOutput.intent}</span>
                   </p>
                 </div>
 

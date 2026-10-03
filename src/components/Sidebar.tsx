@@ -1,6 +1,6 @@
 import React from 'react';
 import type { PageType } from '../types';
-import { LayoutDashboard, FolderGit2, FileText, Sparkles, Layers, ShieldCheck, UserCheck, Cpu } from 'lucide-react';
+import { LayoutDashboard, FolderGit2, Clock, FileText, Sparkles, Layers, ShieldCheck, UserCheck, Cpu } from 'lucide-react';
 
 interface SidebarProps {
   activePage: PageType;
@@ -24,6 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = [
     { id: 'dashboard' as PageType, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'projects' as PageType, label: 'Projects', icon: FolderGit2, badge: projectsCount > 0 ? projectsCount : undefined },
+    { id: 'temporary' as PageType, label: 'Temporary', icon: Clock },
     { id: 'documents' as PageType, label: 'Documents', icon: FileText, badge: documentsCount > 0 ? documentsCount : undefined },
     { id: 'generate' as PageType, label: 'Generate', icon: Sparkles },
     { id: 'outputs' as PageType, label: 'Outputs', icon: Layers, badge: outputsCount > 0 ? outputsCount : undefined },

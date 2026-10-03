@@ -132,22 +132,19 @@ export const TemporaryView: React.FC<TemporaryViewProps> = ({
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* 24-Hour Expiration Warning Banner */}
-      <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 flex items-center justify-between gap-3 text-xs text-amber-200">
-        <div className="flex items-center space-x-3">
-          <Clock className="w-5 h-5 text-amber-400 shrink-0 animate-pulse" />
-          <div>
-            <p className="font-bold text-amber-300">⏰ Temporary Analysis Session</p>
-            <p className="text-[11px] text-amber-200/90 mt-0.5">
-              This session and uploaded temporary files will automatically expire in <span className="font-bold underline">{hoursRemaining} hours</span> unless saved.
-            </p>
-          </div>
+      {/* 24-Hour Expiration Banner (Standard Professional Dark Theme) */}
+      <div className="glass-panel p-5 rounded-2xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-bold text-white tracking-tight">Temporary Analysis Session</h3>
+          <p className="text-xs text-slate-300 mt-0.5">
+            This session and uploaded temporary files will automatically expire in <span className="font-semibold text-slate-100">{hoursRemaining} hours</span> unless saved.
+          </p>
         </div>
 
         <button
           onClick={handleSaveClick}
           disabled={!document}
-          className={`px-4 py-2 rounded-xl font-bold text-xs shadow-md transition flex items-center space-x-1.5 cursor-pointer ${
+          className={`px-4 py-2 rounded-xl font-bold text-xs shadow-md transition flex items-center space-x-1.5 cursor-pointer shrink-0 ${
             !document ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
           }`}
         >

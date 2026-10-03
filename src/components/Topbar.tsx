@@ -1,52 +1,17 @@
 import React from 'react';
-import type { DocumentItem, Project } from '../types';
-import { FolderGit2, FileText, Key, UserCheck } from 'lucide-react';
+import type { DocumentItem } from '../types';
+import { FileText, Key, UserCheck } from 'lucide-react';
 
 interface TopbarProps {
-  currentDocument: DocumentItem | null;
+  currentDocument?: DocumentItem | null;
   onOpenSettings: () => void;
-  activeProjectName: string;
-  setActiveProjectName: (name: string) => void;
-  projects: Project[];
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
-  currentDocument,
-  onOpenSettings,
-  activeProjectName,
-  setActiveProjectName,
-  projects
+  onOpenSettings
 }) => {
   return (
-    <header className="h-16 bg-[#0d1322]/90 backdrop-blur-md border-b border-slate-800/80 px-6 flex items-center justify-between z-10 shrink-0">
-      {/* Left: Project Name Selector */}
-      <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-2 bg-slate-800/60 border border-slate-700/60 px-3 py-1.5 rounded-lg">
-          <FolderGit2 className="w-4 h-4 text-indigo-400" />
-          <select
-            value={activeProjectName}
-            onChange={(e) => setActiveProjectName(e.target.value)}
-            aria-label="Select Project"
-            className="bg-transparent text-xs font-semibold text-slate-200 outline-none cursor-pointer pr-1"
-          >
-            {projects.map(p => (
-              <option key={p.id} value={p.name} className="bg-slate-900 text-slate-200">
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Current Active Document Badge */}
-        <div className="hidden md:flex items-center space-x-2 text-xs bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300">
-          <FileText className="w-3.5 h-3.5 text-sky-400" />
-          <span className="text-slate-400">Current Doc:</span>
-          <span className="font-medium text-slate-200 truncate max-w-[180px]">
-            {currentDocument ? currentDocument.name : 'No Document Selected'}
-          </span>
-        </div>
-      </div>
-
+    <header className="h-16 bg-[#0d1322]/90 backdrop-blur-md border-b border-slate-800/80 px-6 flex items-center justify-end z-10 shrink-0 space-x-3">
       {/* Right: Quick Actions & Profile */}
       <div className="flex items-center space-x-3">
         {/* API Settings */}

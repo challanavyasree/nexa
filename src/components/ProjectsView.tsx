@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import type { AudienceContext, ContentContext, CreatorContext, DocumentItem, GeneratedOutput, PageType, Project } from '../types';
+import type { AudienceContext, ContentContext, CreatorContext, DocumentItem, GeneratedOutput, PageType, Project, VerificationClaim } from '../types';
 import { DEFAULT_AUDIENCE_CONTEXT, DEFAULT_CONTENT_CONTEXT, DEFAULT_CREATOR_CONTEXT } from '../services/sampleData';
-import { FolderGit2, Plus, Sparkles, User, Users, Target, Layers, FileText, CheckCircle2, ArrowRight, X, Play } from 'lucide-react';
+import { FolderGit2, Plus, User, Users, Layers, FileText, CheckCircle2, ArrowLeft, Sparkles, ShieldCheck, AlertTriangle, Clock, Calendar } from 'lucide-react';
 
 interface ProjectsViewProps {
   projects: Project[];
-  activeProject: Project;
+  activeProject: Project | null;
   onSelectProject: (proj: Project) => void;
   onCreateProject: (proj: Project) => void;
   onUpdateProjectContext: (
@@ -17,6 +17,7 @@ interface ProjectsViewProps {
   onNavigatePage: (page: PageType) => void;
   documents: DocumentItem[];
   outputs: GeneratedOutput[];
+  claims?: VerificationClaim[];
 }
 
 export const ProjectsView: React.FC<ProjectsViewProps> = ({
@@ -24,19 +25,18 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
   activeProject,
   onSelectProject,
   onCreateProject,
-  onUpdateProjectContext,
   onNavigatePage,
   documents,
-  outputs
+  outputs,
+  claims = []
 }) => {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newProjName, setNewProjName] = useState('');
   const [newProjDesc, setNewProjDesc] = useState('');
 
-  // Form State for Creator, Audience & Content Context
-  const [creatorCtx, setCreatorCtx] = useState<CreatorContext>(activeProject.creatorContext || DEFAULT_CREATOR_CONTEXT);
-  const [audienceCtx, setAudienceCtx] = useState<AudienceContext>(activeProject.audienceContext || DEFAULT_AUDIENCE_CONTEXT);
-  const [contentCtx, setContentCtx] = useState<ContentContext>(activeProject.contentContext || DEFAULT_CONTENT_CONTEXT);
+  // Selected project object for report view (shown only when selectedProjectId is explicitly set)
+  const selectedProject = selectedProjectId ? (projects.find(p => p.id === selectedProjectId) || null) : null;
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,24 +47,284 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       name: newProjName,
       description: newProjDesc || 'Source-grounded AI content campaign.',
       createdAt: new Date().toISOString().split('T')[0],
-      creatorContext: creatorCtx,
-      audienceContext: audienceCtx,
-      contentContext: contentCtx,
+      creatorContext: DEFAULT_CREATOR_CONTEXT,
+      audienceContext: DEFAULT_AUDIENCE_CONTEXT,
+      contentContext: DEFAULT_CONTENT_CONTEXT,
       documentIds: [],
       outputIds: []
     };
 
     onCreateProject(newProj);
     onSelectProject(newProj);
+    setSelectedProjectId(newProj.id);
     setIsCreateModalOpen(false);
     setNewProjName('');
     setNewProjDesc('');
   };
 
-  const handleSaveContext = () => {
-    onUpdateProjectContext(activeProject.id, creatorCtx, audienceCtx, contentCtx);
-  };
+  // Filter project-specific documents, outputs, and claims
+  const projectDocs = selectedProject
+    ? documents.filter(d => d.projectId === selectedProject.id || selectedProject.documentIds?.includes(d.id))
+    : [];
 
+  const projectOutputs = selectedProject
+    ? outputs.filter(o => o.projectId === selectedProject.id || selectedProject.outputIds?.includes(o.id))
+    : [];
+
+  const projectClaims = selectedProject
+    ? claims.filter(c => projectOutputs.some(o => o.id === c.outputId))
+    : [];
+
+  // If a project report is selected, render the FULL READ-ONLY REPORT VIEW
+  if (selectedProject && selectedProjectId) {
+    return (
+      <div className="p-6 space-y-6 max-w-6xl mx-auto">
+        {/* Top Action Bar & Back Button */}
+        <div className="flex items-center justify-between gap-4 pb-2 border-b border-slate-800">
+          <button
+            onClick={() => setSelectedProjectId(null)}
+            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold flex items-center space-x-2 transition cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 text-indigo-400" />
+            <span>Back to Projects List</span>
+          </button>
+
+          <button
+            onClick={() => onNavigatePage('generate')}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white text-xs font-bold shadow-md flex items-center space-x-1.5 cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Generate New Content for Project</span>
+          </button>
+        </div>
+
+        {/* Project Report Document Container */}
+        <div className="glass-panel p-8 rounded-2xl border border-indigo-500/30 space-y-8 shadow-2xl">
+          {/* Header Section: Name & Description */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="px-3 py-1 text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg uppercase tracking-wider">
+                Project Report Summary
+              </span>
+              <div className="flex items-center space-x-3 text-xs text-slate-400 font-mono">
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-sky-400" />
+                  Created: {selectedProject.createdAt}
+                </span>
+                <span className="px-2.5 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded">
+                  Active
+                </span>
+              </div>
+            </div>
+
+            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+              <FolderGit2 className="w-7 h-7 text-indigo-400 shrink-0" />
+              {selectedProject.name}
+            </h1>
+
+            <p className="text-sm text-slate-300 leading-relaxed bg-slate-900/40 p-4 rounded-xl border border-slate-800/80">
+              {selectedProject.description}
+            </p>
+          </div>
+
+          <hr className="border-slate-800" />
+
+          {/* Section 1: Creator / User Context */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <User className="w-4 h-4 text-sky-400" />
+              Creator / User Context
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">User Type</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.creatorContext?.creatorType || 'Working Professional'}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Domain</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.creatorContext?.domain || 'Computer Science'}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Experience Level</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.creatorContext?.experienceLevel || 'Advanced'}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Primary Goal</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.creatorContext?.primaryGoal || 'Inform'}</span>
+              </div>
+            </div>
+          </div>
+
+          <hr className="border-slate-800" />
+
+          {/* Section 2: Target Audience Context */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-400" />
+              Target Audience Context
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Audience Type</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.audienceContext?.audienceType || 'Management'}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Audience Knowledge</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.audienceContext?.knowledgeLevel || 'Advanced'}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Communication Style</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.audienceContext?.communicationStyle || 'Professional'}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Language</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.audienceContext?.language || 'English'}</span>
+              </div>
+            </div>
+          </div>
+
+          <hr className="border-slate-800" />
+
+          {/* Section 3: Content Intent & Output Context */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <Layers className="w-4 h-4 text-purple-400" />
+              Content Intent & Output Context
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Output Format</span>
+                <span className="text-xs font-semibold text-slate-200 uppercase">{selectedProject.contentContext?.outputType || 'briefing'}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Target Platform / Channel</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.contentContext?.platform || 'LinkedIn'}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Content Tone</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.contentContext?.tone || 'Professional'}</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Content Intent</span>
+                <span className="text-xs font-semibold text-slate-200">{selectedProject.contentContext?.intent || 'Information'}</span>
+              </div>
+            </div>
+          </div>
+
+          <hr className="border-slate-800" />
+
+          {/* Section 4: Source Content / Documents */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <FileText className="w-4 h-4 text-sky-400" />
+              Source Content / Documents ({projectDocs.length})
+            </h3>
+
+            {projectDocs.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {projectDocs.map((doc) => (
+                  <div key={doc.id} className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-3 truncate">
+                      <div className="p-2 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div className="truncate">
+                        <p className="font-semibold text-slate-200 truncate">{doc.name}</p>
+                        <p className="text-[10px] text-slate-400 uppercase">{doc.fileType} • {doc.size}</p>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/20 text-emerald-400 rounded border border-emerald-500/30 uppercase shrink-0">
+                      {doc.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/60 text-xs text-slate-400">
+                No source documents attached yet for this project.
+              </div>
+            )}
+          </div>
+
+          <hr className="border-slate-800" />
+
+          {/* Section 5: Generated Outputs */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-400" />
+              Generated Outputs ({projectOutputs.length})
+            </h3>
+
+            {projectOutputs.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {projectOutputs.map((out) => (
+                  <div key={out.id} className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-200">{out.title}</span>
+                      <span className="px-2 py-0.5 text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded uppercase">
+                        {out.type}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 line-clamp-2 italic bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+                      "{out.content.substring(0, 120)}..."
+                    </p>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
+                      <span>Platform: {out.platform}</span>
+                      <span className="text-emerald-400 font-semibold">✓ {out.verificationStatus}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/60 text-xs text-slate-400">
+                No outputs generated yet for this project. Click "Generate New Content" above to launch pipeline.
+              </div>
+            )}
+          </div>
+
+          <hr className="border-slate-800" />
+
+          {/* Section 6: Verification / Review Status */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              Verification & Review Status
+            </h3>
+
+            {projectClaims.length > 0 ? (
+              <div className="space-y-2">
+                {projectClaims.map((claim) => (
+                  <div key={claim.id} className="p-3 rounded-xl bg-slate-900/50 border border-slate-800 flex items-center justify-between text-xs">
+                    <div className="space-y-1">
+                      <p className="font-medium text-slate-200">{claim.claimText}</p>
+                      <p className="text-[10px] text-slate-400 italic">Source Evidence: "{claim.evidenceQuote}"</p>
+                    </div>
+                    <span className={`px-2.5 py-1 text-[10px] font-bold rounded border uppercase ${
+                      claim.status === 'verified' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                    }`}>
+                      {claim.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/60 text-xs text-slate-400 flex items-center justify-between">
+                <span>Verification audit trail: 100% source-grounded claim mapping active.</span>
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-400 rounded">
+                  System Active
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // DEFAULT VIEW: CLEAN PROJECTS LIST GRID (NO RIGHT-SIDE CONFIGURATION FORM)
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Top Banner */}
@@ -72,15 +332,15 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <FolderGit2 className="w-5 h-5 text-indigo-400" />
-            Project Workspaces & Context Configuration
+            Active Projects Workspace
           </h2>
           <p className="text-xs text-slate-300 mt-1">
-            Configure Creator Context, Target Audience Context, and Content Channel parameters for project-scoped RAG.
+            Browse and view saved AI Content Intelligence project reports and source-grounded campaigns.
           </p>
         </div>
 
         <button
-          onClick={() => setIsCreateModalOpen(true)}
+          onClick={() => onNavigatePage('generate')}
           className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white text-xs font-bold shadow-lg flex items-center space-x-2 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
@@ -88,283 +348,49 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         </button>
       </div>
 
-      {/* Grid: Left Projects List | Right Active Project Context Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column (4 cols): Projects Selector List */}
-        <div className="lg:col-span-4 space-y-3">
-          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider px-1">
-            Active Projects ({projects.length})
-          </h3>
+      {/* Full Width Clean Projects Grid */}
+      <div className="space-y-3">
+        <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider px-1">
+          Saved Projects ({projects.length})
+        </h3>
 
-          <div className="space-y-2.5">
-            {projects.map((proj) => {
-              const isSelected = activeProject.id === proj.id;
-              return (
-                <div
-                  key={proj.id}
-                  onClick={() => {
-                    onSelectProject(proj);
-                    setCreatorCtx(proj.creatorContext);
-                    setAudienceCtx(proj.audienceContext);
-                    setContentCtx(proj.contentContext);
-                  }}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer space-y-2 ${
-                    isSelected
-                      ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900 border-indigo-500 shadow-md'
-                      : 'bg-slate-900/40 border-slate-800 hover:bg-slate-800/50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white truncate max-w-[190px]">{proj.name}</span>
-                    <span className="px-2 py-0.5 text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded uppercase">
-                      Active
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 line-clamp-2">{proj.description}</p>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-800/80 font-mono">
-                    <span>Created: {proj.createdAt}</span>
-                    <span className="text-sky-400 font-semibold">{proj.creatorContext.domain}</span>
-                  </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {projects.map((proj) => (
+            <div
+              key={proj.id}
+              onClick={() => {
+                onSelectProject(proj);
+                setSelectedProjectId(proj.id);
+              }}
+              className="glass-panel glass-panel-hover p-6 rounded-2xl border border-slate-800/80 hover:border-indigo-500/50 cursor-pointer transition-all space-y-4 group flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-1 text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-md uppercase">
+                    {proj.creatorContext?.domain || 'Computer Science'}
+                  </span>
+                  <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded uppercase">
+                    Active
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
 
-        {/* Right Column (8 cols): Project Workspace Context Panels */}
-        <div className="lg:col-span-8 space-y-6">
-          <div className="glass-panel p-6 rounded-2xl space-y-6 border border-indigo-500/20">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Project Workspace Context</span>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  {activeProject.name}
+                <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition line-clamp-1">
+                  {proj.name}
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">{activeProject.description}</p>
+
+                <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                  {proj.description}
+                </p>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={handleSaveContext}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md flex items-center space-x-1.5 cursor-pointer"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Save Context Parameters</span>
-                </button>
-
-                <button
-                  onClick={() => onNavigatePage('generate')}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md flex items-center space-x-1.5 cursor-pointer"
-                >
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>Launch Pipeline →</span>
-                </button>
+              <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 font-mono">
+                <span className="text-[11px]">Created: {proj.createdAt}</span>
+                <span className="text-sky-400 font-bold group-hover:translate-x-1 transition flex items-center gap-1">
+                  View Report →
+                </span>
               </div>
             </div>
-
-            {/* Context Section 1: Creator / User Context (Phase 3) */}
-            <div className="space-y-3 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <User className="w-4 h-4 text-sky-400" />
-                Phase 3: Creator / User Context
-              </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Creator Type</label>
-                  <select
-                    value={creatorCtx.creatorType}
-                    onChange={(e) => setCreatorCtx({ ...creatorCtx, creatorType: e.target.value as any })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  >
-                    <option value="Student">Student</option>
-                    <option value="Working Professional">Working Professional</option>
-                    <option value="Researcher">Researcher</option>
-                    <option value="Faculty/Educator">Faculty / Educator</option>
-                    <option value="Entrepreneur">Entrepreneur</option>
-                    <option value="Organization/Team">Organization / Team</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Creator Domain</label>
-                  <select
-                    value={creatorCtx.domain}
-                    onChange={(e) => setCreatorCtx({ ...creatorCtx, domain: e.target.value as any })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  >
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="AI/ML">AI / ML</option>
-                    <option value="Business">Business</option>
-                    <option value="Healthcare">Healthcare</option>
-                    <option value="Education">Education</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Finance">Finance</option>
-                    <option value="Other">Other Domain</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Experience Level</label>
-                  <select
-                    value={creatorCtx.experienceLevel}
-                    onChange={(e) => setCreatorCtx({ ...creatorCtx, experienceLevel: e.target.value as any })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  >
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                    <option value="Expert">Expert</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Primary Goal</label>
-                  <select
-                    value={creatorCtx.primaryGoal}
-                    onChange={(e) => setCreatorCtx({ ...creatorCtx, primaryGoal: e.target.value as any })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  >
-                    <option value="Inform">Inform</option>
-                    <option value="Promote">Promote</option>
-                    <option value="Educate">Educate</option>
-                    <option value="Summarize">Summarize</option>
-                    <option value="Present">Present</option>
-                    <option value="Explain">Explain</option>
-                    <option value="Announce">Announce</option>
-                    <option value="Persuade">Persuade</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Context Section 2: Target Audience Context (Phase 4) */}
-            <div className="space-y-3 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Users className="w-4 h-4 text-emerald-400" />
-                Phase 4: Target Audience Context
-              </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Audience Type</label>
-                  <select
-                    value={audienceCtx.audienceType}
-                    onChange={(e) => setAudienceCtx({ ...audienceCtx, audienceType: e.target.value as any })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  >
-                    <option value="Students">Students</option>
-                    <option value="Working Professionals">Working Professionals</option>
-                    <option value="Recruiters">Recruiters</option>
-                    <option value="Researchers">Researchers</option>
-                    <option value="Faculty">Faculty</option>
-                    <option value="Customers">Customers</option>
-                    <option value="Management">Management</option>
-                    <option value="Developers">Developers</option>
-                    <option value="General Public">General Public</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Audience Knowledge</label>
-                  <select
-                    value={audienceCtx.knowledgeLevel}
-                    onChange={(e) => setAudienceCtx({ ...audienceCtx, knowledgeLevel: e.target.value as any })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  >
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Communication Style</label>
-                  <select
-                    value={audienceCtx.communicationStyle}
-                    onChange={(e) => setAudienceCtx({ ...audienceCtx, communicationStyle: e.target.value as any })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  >
-                    <option value="Simple">Simple</option>
-                    <option value="Professional">Professional</option>
-                    <option value="Technical">Technical</option>
-                    <option value="Formal">Formal</option>
-                    <option value="Conversational">Conversational</option>
-                    <option value="Promotional">Promotional</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Language</label>
-                  <input
-                    type="text"
-                    value={audienceCtx.language}
-                    onChange={(e) => setAudienceCtx({ ...audienceCtx, language: e.target.value })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Context Section 3: Content Intent & Channel (Phase 5) */}
-            <div className="space-y-3 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Layers className="w-4 h-4 text-purple-400" />
-                Phase 5: Content Intent & Channel Configuration
-              </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Output Format</label>
-                  <select
-                    value={contentCtx.outputType}
-                    onChange={(e) => setContentCtx({ ...contentCtx, outputType: e.target.value as any })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  >
-                    <option value="briefing">Briefing Memo</option>
-                    <option value="social">Social Media Post</option>
-                    <option value="ppt">Presentation Outline</option>
-                    <option value="script">Video Script</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Target Platform / Channel</label>
-                  <select
-                    value={contentCtx.platform}
-                    onChange={(e) => setContentCtx({ ...contentCtx, platform: e.target.value as any })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  >
-                    <option value="LinkedIn">LinkedIn</option>
-                    <option value="Instagram">Instagram</option>
-                    <option value="Presentation">Presentation</option>
-                    <option value="Internal Report">Internal Report</option>
-                    <option value="Website">Website</option>
-                    <option value="YouTube">YouTube</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Content Tone</label>
-                  <select
-                    value={contentCtx.tone}
-                    onChange={(e) => setContentCtx({ ...contentCtx, tone: e.target.value as any })}
-                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 outline-none"
-                  >
-                    <option value="Professional">Professional</option>
-                    <option value="Educational">Educational</option>
-                    <option value="Engaging">Engaging</option>
-                    <option value="Formal">Formal</option>
-                    <option value="Concise">Concise</option>
-                    <option value="Promotional">Promotional</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -376,7 +402,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
               onClick={() => setIsCreateModalOpen(false)}
               className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
             >
-              <X className="w-4 h-4" />
+              ✕
             </button>
 
             <div className="flex items-center space-x-3">
@@ -425,7 +451,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md"
                 >
-                  Create Project Workspace
+                  Create & View Report
                 </button>
               </div>
             </form>

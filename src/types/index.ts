@@ -1,12 +1,12 @@
 export type PageType = 'dashboard' | 'projects' | 'documents' | 'generate' | 'outputs' | 'verification' | 'review' | 'temporary';
 
-export type CreatorType = 'Student' | 'Working Professional' | 'Researcher' | 'Faculty/Educator' | 'Entrepreneur' | 'Organization/Team' | 'Other';
+export type CreatorType = 'Student' | 'Working Professional' | 'Researcher' | 'Faculty/Educator' | 'Entrepreneur' | 'Organization/Team' | 'Other' | string;
 
-export type CreatorDomain = 'Computer Science' | 'AI/ML' | 'Business' | 'Healthcare' | 'Education' | 'Marketing' | 'Finance' | 'Other';
+export type CreatorDomain = 'Artificial Intelligence' | 'Computer Science' | 'AI/ML' | 'Business' | 'Healthcare' | 'Education' | 'Marketing' | 'Finance' | 'Other' | string;
 
-export type ExperienceLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+export type ExperienceLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert' | string;
 
-export type PrimaryGoal = 'Inform' | 'Promote' | 'Educate' | 'Summarize' | 'Present' | 'Explain' | 'Announce' | 'Persuade';
+export type PrimaryGoal = 'Learn' | 'Inform' | 'Promote' | 'Educate' | 'Summarize' | 'Present' | 'Explain' | 'Announce' | 'Persuade' | string;
 
 export interface CreatorContext {
   creatorType: CreatorType;
@@ -16,7 +16,9 @@ export interface CreatorContext {
   primaryGoal: PrimaryGoal;
 }
 
-export type TargetAudienceType = 'Students' | 'Working Professionals' | 'Recruiters' | 'Researchers' | 'Faculty' | 'Customers' | 'Management' | 'Developers' | 'General Public' | 'Other';
+export type TargetAudienceType = 'School Students' | 'Students' | 'Working Professionals' | 'Recruiters' | 'Researchers' | 'Faculty' | 'Customers' | 'Management' | 'Developers' | 'General Public' | 'Other' | string;
+export type TargetAudience = TargetAudienceType;
+export type IntentType = string;
 
 export type AudienceKnowledge = 'Beginner' | 'Intermediate' | 'Advanced';
 

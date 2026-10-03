@@ -109,10 +109,8 @@ export const INITIAL_DEMO_DOCUMENT: DocumentItem = {
   isDemo: true
 };
 
-export const generateSampleOutputs = (
-  docId: string,
-  projectId: string,
-  docName: string,
+export const generateDynamicOutputs = (
+  docItem: DocumentItem,
   creatorContext: CreatorContext,
   audienceContext: AudienceContext,
   contentContext: ContentContext
@@ -121,220 +119,247 @@ export const generateSampleOutputs = (
   const audience = audienceContext.audienceType === 'Other' && audienceContext.customAudienceType
     ? audienceContext.customAudienceType
     : audienceContext.audienceType;
-  const intent = contentContext.intent;
-  const platform = contentContext.platform;
-  const tone = contentContext.tone;
+  
+  const intent = contentContext.intent || 'Information';
+  const platform = contentContext.platform || 'LinkedIn';
+  const tone = contentContext.tone || 'Professional';
+  const language = audienceContext.language || 'English';
 
-  // Scenario A vs B customization based on Audience + Intent + Tone
-  let briefingText = '';
-  let socialText = '';
-  let pptText = '';
-  let videoText = '';
+  const isStudentAudience = audience.toLowerCase().includes('student');
+  const isExecutiveAudience = audience.toLowerCase().includes('management') || audience.toLowerCase().includes('executive');
+  
+  const docTopic = docItem.extractedInfo?.topic || docItem.name.replace(/\.[^/.]+$/, '');
+  const docDate = docItem.extractedInfo?.date || 'N/A';
+  const docOrg = docItem.extractedInfo?.department || docItem.extractedInfo?.organizations?.[0] || 'Source Organization';
+  const docTurnout = docItem.extractedInfo?.participants || '';
+  const docKeyPoints = docItem.extractedInfo?.keyPoints || ['Extracted facts indexed from source document.'];
 
-  if (audience === 'Students' || tone === 'Engaging' || tone === 'Promotional') {
-    briefingText = `STUDENT & INNOVATOR BRIEFING: GLOBAL TECH SUMMIT 🚀
-Target Audience: ${audience} | Tone: ${tone} | Channel: ${platform}
-Date: November 15 | Host: Global Technology Foundation
+  // Audience & Tone vocabulary adaptors
+  const audienceHeading = isStudentAudience
+    ? `[STUDENT EDUCATIONAL EDITION — ACCESSIBLE CONTEXT]`
+    : isExecutiveAudience
+    ? `[EXECUTIVE BRIEFING EDITION — STRATEGIC CONTEXT]`
+    : `[${audience.toUpperCase()} EDITION]`;
 
-WHAT HAPPENED:
-500 enthusiastic participants gathered for the Global Tech Innovation Summit on November 15!
+  const audienceIntro = isStudentAudience
+    ? `Designed specifically for ${audience} in simple, easy-to-understand language. Focuses on foundational learning and clear concepts without complex jargon.`
+    : isExecutiveAudience
+    ? `Prepared for ${audience} leadership. Delivers high-level strategic intelligence, operational implications, and decision-making takeaways.`
+    : `Tailored for ${audience} audience with ${audienceContext.communicationStyle.toLowerCase()} communication style.`;
 
-KEY TAKEAWAYS:
-• Massive Turnout: 500 delegates and tech enthusiasts.
-• Core Topics: AI architectures, sustainable clean tech, and digital leadership.
-• Goal: Empowering delegates to build groundbreaking tech solutions.`;
+  // 1. Briefing Memo
+  const briefingText = `${audienceHeading}
+${tone.toUpperCase()} BRIEFING: ${docTopic.toUpperCase()}
+Target Audience: ${audience} (${audienceContext.knowledgeLevel} Knowledge) | Tone: ${tone} | Channel: ${platform}
+Language: ${language} | Objective: ${intent} | Primary Goal: ${creatorContext.primaryGoal}
+Prepared by: ${creatorContext.creatorType} (${creatorContext.domain} - ${creatorContext.experienceLevel})
 
-    socialText = `🔥 500 Delegates, 1 Global Summit! 🔥
+1. OVERVIEW & PURPOSE:
+${audienceIntro}
+Source Document: "${docItem.name}". Organization: ${docOrg}.${docDate !== 'N/A' ? ` Date: ${docDate}.` : ''}${docTurnout ? ` Turnout: ${docTurnout}.` : ''}
 
-Highlights from the Global Tech Innovation Summit hosted by the Global Technology Foundation on November 15!
+2. KEY SOURCE FINDINGS:
+${docKeyPoints.map((kp, i) => `• Takeaway ${i + 1}: ${kp}`).join('\n')}
 
-From artificial intelligence to sustainable clean tech, 500 minds collaborated to redefine innovation.
+3. TARGET AUDIENCE STRATEGY (${audience.toUpperCase()}):
+• Vocabulary & Style: ${audienceContext.communicationStyle} style suited for ${audienceContext.knowledgeLevel} comprehension.
+• Strategic Goal: Support creator objective to ${creatorContext.primaryGoal.toLowerCase()} via ${platform}.
+• Strategic Intent: ${intent} (${tone} communication).`;
 
-Platform: ${platform} | Prepared by: ${creatorContext.creatorType} (${creatorContext.domain})
-#GlobalTechSummit #TechInnovation #AI #Sustainability #FutureTech`;
+  // 2. Social Media Post
+  const socialHook = isStudentAudience
+    ? `🎓 Hey ${audience}! Ready to learn about ${docTopic}? Here is your fun and easy breakdown on ${platform}:`
+    : isExecutiveAudience
+    ? `💼 Strategic Update for ${audience}: Key leadership insights from "${docItem.name}" on ${platform}:`
+    : `📌 ${docTopic} — ${intent} Update for ${audience} on ${platform}:`;
 
-    pptText = `SLIDE DECK OUTLINE: GLOBAL TECH SUMMIT (STUDENT & COMMUNITY EDITION)
-Audience: ${audience} | Tone: ${tone} | Channel: ${platform}
+  const socialText = `${socialHook}
 
-SLIDE 1: Title & Energy Hook
-• Global Tech Innovation Summit 2026
-• Hosted by Global Technology Foundation on November 15
+${docKeyPoints.slice(0, 3).map(kp => `► ${kp}`).join('\n')}
 
-SLIDE 2: Participation & Scale
-• 500 delegates under one roof
-• Keynote talks, workshops & real-time hackathons
+${docTurnout ? `⚡ Scope/Participants: ${docTurnout}\n` : ''}🏛️ Source Entity: ${docOrg}
+📅 Event/Reference Date: ${docDate}
 
-SLIDE 3: Key Tech Breakthroughs
-• Artificial Intelligence & Deep Learning
-• Sustainable Clean Technologies
+Tone: ${tone} | Intent: ${intent} | Created by: ${creatorContext.creatorType} (${creatorContext.domain})
+#${docTopic.replace(/\s+/g, '')} #${platform} #${tone} #${audience.replace(/\s+/g, '')}`;
 
-SLIDE 4: Call to Action & Join Movement
-• Build real-world solutions with 500 innovators`;
+  // 3. Presentation Deck Outline
+  const pptText = `PRESENTATION DECK OUTLINE: ${docTopic.toUpperCase()}
+Target Audience: ${audience} | Tone: ${tone} | Channel: ${platform} | Language: ${language}
+Presenter: ${creatorContext.creatorType} (${creatorContext.domain}) | Objective: ${intent}
 
-    videoText = `VIDEO SCRIPT (1-MINUTE HIGH-ENERGY PROMO)
-[Visual: Fast-paced drone shot of conference hall filled with 500 cheering delegates]
-[Audio / Voiceover]: "What happens when 500 tech delegates assemble on November 15?"
+SLIDE 1: Title & Audience Purpose
+• Topic: ${docTopic} (${audienceHeading})
+• Target Audience: ${audience} (${audienceContext.knowledgeLevel} Level)
+• Source Material: ${docItem.name}
 
-[Visual: Speaker presenting AI neural network charts on stage]
-[Audio / Voiceover]: "Welcome to the Global Tech Innovation Summit, hosted by the Global Technology Foundation!"
+SLIDE 2: Key Source Evidence & Scope
+• Host / Organization: ${docOrg}
+• Reference Details: ${docDate} ${docTurnout ? `| Scale: ${docTurnout}` : ''}
+• Intent & Tone: ${intent} (${tone})
 
-[Visual: Attendees high-fiving and collaborating over laptops]
-[Audio / Voiceover]: "From AI models to sustainable tech, 500 delegates created solutions for tomorrow."
+SLIDE 3: Core Findings
+${docKeyPoints.slice(0, 4).map((kp, idx) => `• Point ${idx + 1}: ${kp}`).join('\n')}
 
-[Visual: Screen text displaying call to action]
-[Audio / Voiceover]: "Global Tech Summit — powering the future!"`;
+SLIDE 4: Action Items & Communication Strategy
+• Platform Channel: ${platform}
+• Primary Goal: ${creatorContext.primaryGoal}`;
 
-  } else {
-    // Executive / Management Scenario B
-    briefingText = `EXECUTIVE BRIEFING: GLOBAL TECH INNOVATION SUMMIT
-Target Audience: ${audience} | Tone: ${tone} | Channel: ${platform}
-Prepared by: ${creatorContext.creatorType} (${creatorContext.domain}) | Date: November 15
+  // 4. Video Script
+  const videoText = `VIDEO SCRIPT (${platform.toUpperCase()} FORMAT)
+Target Audience: ${audience} | Tone: ${tone} | Language: ${language} | Intent: ${intent}
 
-EXECUTIVE SUMMARY:
-The Global Technology Foundation successfully convened the Global Tech Innovation Summit on November 15. The event brought together 500 industry leaders and technical delegates.
+[00:00 - 00:15] INTRO HOOK:
+[Visual: Graphic text displaying "${docTopic}" tailored for ${audience}]
+[Voiceover]: "${isStudentAudience ? `Welcome students! Here is what you need to know about ${docTopic}!` : `Executive summary: Here is your brief on ${docTopic} from ${docOrg}.`}"
 
-STRATEGIC HIGHLIGHTS:
-• Executive Turnout: Exactly 500 registered delegates.
-• Core Domains: Enterprise AI, Sustainable Clean Tech, and Digital Transformation.
-• Strategic Value: High departmental engagement, key alliance formations, and tech policy alignment.`;
+[00:15 - 00:40] CORE EVIDENCE & FACTS:
+[Visual: Key highlights from source document ${docItem.name}]
+[Voiceover]: "${docKeyPoints[0] || docTopic}. ${docKeyPoints[1] || ''}"
 
-    socialText = `We are proud to summarize the outcomes of the Global Tech Innovation Summit hosted by the Global Technology Foundation on November 15.
+[00:40 - 00:60] OUTRO & CALL TO ACTION:
+[Visual: Call to action banner for ${audience} on ${platform}]
+[Voiceover]: "That's your breakdown for ${audience} on ${platform}. Follow for more ${creatorContext.domain} updates!"`;
 
-With 500 delegates actively participating, the summit reinforced key initiatives in enterprise AI and sustainable technology leadership.
+  // Build dynamic RAG source evidence directly from document's facts
+  const evidenceBase = docKeyPoints.slice(0, 3).map((kp, idx) => ({
+    sourceDoc: docItem.name,
+    page: idx + 1,
+    evidenceText: kp,
+    confidence: 0.95 + (idx * 0.01)
+  }));
 
-Platform: ${platform} | Prepared for ${audience}
-#GlobalTechnologyFoundation #ExecutiveBriefing #TechLeadership #AI`;
-
-    pptText = `SLIDE DECK OUTLINE: GLOBAL TECH INNOVATION SUMMIT (EXECUTIVE EDITION)
-Target Audience: ${audience} | Tone: ${tone} | Channel: ${platform}
-
-SLIDE 1: Executive Context & Overview
-• Global Tech Innovation Summit 2026
-• Hosted by Global Technology Foundation
-• Event Date: November 15
-
-SLIDE 2: Scale & Stakeholder Metrics
-• Total Attendance: 500 delegates
-• Cross-industry representation & executive workshops
-
-SLIDE 3: Strategic Priorities & Directives
-• Enterprise AI Architecture & Governance
-• Sustainable Technology & Carbon Reduction
-• Accelerating Digital Transformation Roadmap
-
-SLIDE 4: Strategic Recommendations & Next Steps
-• Implement policy frameworks agreed by 500 delegates`;
-
-    videoText = `VIDEO SCRIPT (1-MINUTE EXECUTIVE BRIEFING)
-[Visual: Professional conference hall, executive delegates seated at roundtable discussions]
-[Audio / Voiceover]: "On November 15, 500 technology leaders convened for the Global Tech Innovation Summit."
-
-[Visual: Keynote speaker presenting strategic roadmap on large LED screen]
-[Audio / Voiceover]: "Organized by the Global Technology Foundation, the summit addressed enterprise AI and sustainable technology."
-
-[Visual: Delegates shaking hands and exchanging strategic documents]
-[Audio / Voiceover]: "500 delegates. 1 shared vision for digital transformation."`;
+  if (evidenceBase.length === 0) {
+    evidenceBase.push({
+      sourceDoc: docItem.name,
+      page: 1,
+      evidenceText: docItem.rawText.slice(0, 150),
+      confidence: 0.98
+    });
   }
 
-  const evidenceBase = [
-    {
-      sourceDoc: docName,
-      page: 1,
-      evidenceText: '500 participants attended the summit.',
-      confidence: 0.98
-    },
-    {
-      sourceDoc: docName,
-      page: 1,
-      evidenceText: 'The Global Tech Innovation Summit is an annual technology conference organized by the Global Technology Foundation.',
-      confidence: 0.96
-    },
-    {
-      sourceDoc: docName,
-      page: 1,
-      evidenceText: 'Event Date: November 15.',
-      confidence: 0.99
-    }
+  const briefingObj: GeneratedOutput = {
+    id: `out-briefing-${Date.now()}`,
+    docId: docItem.id,
+    projectId: docItem.projectId || 'proj-001',
+    title: `Briefing Memo (${audience} - ${intent})`,
+    type: 'briefing',
+    audience,
+    intent,
+    platform,
+    tone,
+    content: briefingText,
+    sourceEvidence: evidenceBase,
+    verificationStatus: 'verified',
+    humanStatus: 'pending',
+    createdAt: timestamp,
+    auditTrail: [{ action: 'Generated by Multi-Agent RAG Engine', timestamp }]
+  };
+
+  const socialObj: GeneratedOutput = {
+    id: `out-social-${Date.now() + 1}`,
+    docId: docItem.id,
+    projectId: docItem.projectId || 'proj-001',
+    title: `Social Media Post (${platform} - ${tone})`,
+    type: 'social',
+    audience,
+    intent,
+    platform,
+    tone,
+    content: socialText,
+    sourceEvidence: evidenceBase,
+    verificationStatus: 'verified',
+    humanStatus: 'pending',
+    createdAt: timestamp,
+    auditTrail: [{ action: 'Generated by Multi-Agent RAG Engine', timestamp }]
+  };
+
+  const pptObj: GeneratedOutput = {
+    id: `out-ppt-${Date.now() + 2}`,
+    docId: docItem.id,
+    projectId: docItem.projectId || 'proj-001',
+    title: `Presentation Deck Outline (${audience})`,
+    type: 'ppt',
+    audience,
+    intent,
+    platform,
+    tone,
+    content: pptText,
+    sourceEvidence: evidenceBase,
+    verificationStatus: 'verified',
+    humanStatus: 'pending',
+    createdAt: timestamp,
+    auditTrail: [{ action: 'Generated by Multi-Agent RAG Engine', timestamp }]
+  };
+
+  const scriptObj: GeneratedOutput = {
+    id: `out-script-${Date.now() + 3}`,
+    docId: docItem.id,
+    projectId: docItem.projectId || 'proj-001',
+    title: `1-Min Video Script (${platform})`,
+    type: 'script',
+    audience,
+    intent,
+    platform,
+    tone,
+    content: videoText,
+    sourceEvidence: evidenceBase,
+    verificationStatus: 'verified',
+    humanStatus: 'pending',
+    createdAt: timestamp,
+    auditTrail: [{ action: 'Generated by Multi-Agent RAG Engine', timestamp }]
+  };
+
+  const allOutputs = [briefingObj, socialObj, pptObj, scriptObj];
+  const requestedFormat = contentContext.outputType || 'briefing';
+
+  // Step 3 & Step 10: Prioritize the user's selected format as the FIRST item
+  const sortedOutputs = [
+    ...allOutputs.filter(o => o.type === requestedFormat),
+    ...allOutputs.filter(o => o.type !== requestedFormat)
   ];
 
-  return [
-    {
-      id: `out-briefing-${Date.now()}`,
-      docId,
-      projectId,
-      title: `Briefing Memo (${audience} - ${intent})`,
-      type: 'briefing',
-      audience,
-      intent,
-      platform,
-      tone,
-      content: briefingText,
-      sourceEvidence: evidenceBase,
-      verificationStatus: 'verified',
-      humanStatus: 'pending',
-      createdAt: timestamp,
-      auditTrail: [
-        { action: 'Generated by Multi-Agent RAG Engine', timestamp }
-      ]
-    },
-    {
-      id: `out-social-${Date.now() + 1}`,
-      docId,
-      projectId,
-      title: `Social Media Post (${platform} - ${tone})`,
-      type: 'social',
-      audience,
-      intent,
-      platform,
-      tone,
-      content: socialText,
-      sourceEvidence: evidenceBase,
-      verificationStatus: 'verified',
-      humanStatus: 'pending',
-      createdAt: timestamp,
-      auditTrail: [
-        { action: 'Generated by Multi-Agent RAG Engine', timestamp }
-      ]
-    },
-    {
-      id: `out-ppt-${Date.now() + 2}`,
-      docId,
-      projectId,
-      title: `Presentation Deck Outline (${audience})`,
-      type: 'ppt',
-      audience,
-      intent,
-      platform,
-      tone,
-      content: pptText,
-      sourceEvidence: evidenceBase,
-      verificationStatus: 'verified',
-      humanStatus: 'pending',
-      createdAt: timestamp,
-      auditTrail: [
-        { action: 'Generated by Multi-Agent RAG Engine', timestamp }
-      ]
-    },
-    {
-      id: `out-script-${Date.now() + 3}`,
-      docId,
-      projectId,
-      title: `1-Min Video Promo Script (${platform})`,
-      type: 'script',
-      audience,
-      intent,
-      platform,
-      tone,
-      content: videoText,
-      sourceEvidence: evidenceBase,
-      verificationStatus: 'verified',
-      humanStatus: 'pending',
-      createdAt: timestamp,
-      auditTrail: [
-        { action: 'Generated by Multi-Agent RAG Engine', timestamp }
-      ]
+  return sortedOutputs;
+};
+
+export const generateSampleOutputs = (
+  docId: string,
+  projectId: string,
+  docName: string,
+  creatorContext: CreatorContext,
+  audienceContext: AudienceContext,
+  contentContext: ContentContext,
+  documentItem?: DocumentItem
+): GeneratedOutput[] => {
+  const doc: DocumentItem = documentItem || {
+    id: docId,
+    projectId: projectId,
+    name: docName,
+    fileType: 'pdf',
+    size: '1.4 MB',
+    uploadTime: 'Just now',
+    status: 'processed',
+    rawText: `Document: ${docName}\nAnalysis for ${projectId}`,
+    extractedInfo: {
+      topic: docName.replace(/\.[^/.]+$/, ''),
+      type: 'Document Intelligence',
+      date: new Date().toLocaleDateString(),
+      location: 'Source Repository',
+      participants: 'Target Audience',
+      department: 'Content Intelligence Engine',
+      purpose: 'Source grounded content generation',
+      organizations: ['Content Intelligence Platform'],
+      people: ['Author'],
+      keyPoints: [
+        `Source document indexed: ${docName}`,
+        `Objective: ${contentContext.intent} for ${audienceContext.audienceType}`,
+        `Platform Channel: ${contentContext.platform}`
+      ],
+      importantFacts: [`Doc: ${docName}`]
     }
-  ];
+  };
+
+  return generateDynamicOutputs(doc, creatorContext, audienceContext, contentContext);
 };
 
 export const INITIAL_VERIFICATION_CLAIMS: VerificationClaim[] = [

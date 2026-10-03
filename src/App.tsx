@@ -169,6 +169,7 @@ export const App: React.FC = () => {
 
   // Action: Update Outputs when Generated
   const handleOutputsGenerated = (newOutputs: GeneratedOutput[]) => {
+    console.log('SAVED_OUTPUT_PAYLOAD', newOutputs);
     setOutputs(newOutputs);
 
     if (activeDocument) {
@@ -263,14 +264,7 @@ export const App: React.FC = () => {
       <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
         {/* Topbar */}
         <Topbar
-          currentDocument={activeDocument}
           onOpenSettings={() => setIsSettingsOpen(true)}
-          activeProjectName={activeProject.name}
-          setActiveProjectName={(name) => {
-            const found = projects.find(p => p.name === name);
-            if (found) setActiveProject(found);
-          }}
-          projects={projects}
         />
 
         {/* Dynamic Page Views */}
@@ -281,7 +275,7 @@ export const App: React.FC = () => {
               outputs={outputs}
               claims={claims}
               projects={projects}
-              onStartNewProject={() => setActivePage('projects')}
+              onStartNewProject={() => setActivePage('generate')}
               onOpenTemporaryAnalysis={() => setActivePage('temporary')}
               onNavigatePage={setActivePage}
               onSelectProject={setActiveProject}
@@ -311,13 +305,17 @@ export const App: React.FC = () => {
               onNavigatePage={setActivePage}
               documents={documents}
               outputs={outputs}
+              claims={claims}
             />
           )}
 
           {activePage === 'documents' && (
             <DocumentsView
+              projects={projects}
               documents={documents}
               activeDocument={activeDocument}
+              activeProject={activeProject}
+              onSelectProject={setActiveProject}
               onSelectDocument={setActiveDocument}
               onAddDocument={handleAddDocument}
               onDeleteDocument={handleDeleteDocument}
@@ -342,6 +340,10 @@ export const App: React.FC = () => {
               onOutputsGenerated={handleOutputsGenerated}
               onProceedToOutputs={() => setActivePage('outputs')}
               apiSettings={apiSettings}
+              onAddDocument={handleAddDocument}
+              onSelectDocument={setActiveDocument}
+              onCreateProject={handleCreateProject}
+              onNavigatePage={setActivePage}
             />
           )}
 
