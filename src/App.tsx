@@ -66,25 +66,50 @@ export const App: React.FC = () => {
   // Settings Modal State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const envApiKey = (import.meta as any).env?.VITE_OPENAI_API_KEY || (import.meta as any).env?.VITE_LLM_API_KEY || '';
-  const [apiSettings, setApiSettings] = useState<ApiSettings>({
-    apiKey: envApiKey,
-    provider: envApiKey ? 'openai' : 'mock',
-    modelName: envApiKey ? 'gpt-4o-mini' : 'mock-engine',
-    apiUrl: 'http://localhost:8000'
+  const [apiSettings, setApiSettings] = useState<ApiSettings>(() => {
+    try {
+      const saved = localStorage.getItem('nexa_api_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.apiKey !== undefined) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return {
+      apiKey: envApiKey,
+      provider: envApiKey ? 'openai' : 'mock',
+      modelName: envApiKey ? 'gpt-4o-mini' : 'mock-engine',
+      apiUrl: 'http://localhost:8000'
+    };
   });
 
   const handleSaveApiSettings = async (newSettings: ApiSettings) => {
-    console.log('Vision API configured:', Boolean(newSettings.apiKey));
+    try {
+      localStorage.setItem('nexa_api_settings', JSON.stringify(newSettings));
+    } catch (e) {}
+
     setApiSettings(newSettings);
+
+    console.log('VISION_CONFIG_CHECK', {
+      visionConfigured: Boolean(newSettings.apiKey),
+      provider: newSettings.provider,
+      model: newSettings.modelName
+    });
 
     if (activeDocument?._rawFile) {
       try {
         const { text, fileType } = await processUploadedFile(activeDocument._rawFile, newSettings);
         const extractedInfo = extractStructuredInfoFromText(text, fileType, activeDocument.name);
+        const isVisionFailed = fileType === 'image' && (
+          text.includes('Visual understanding unavailable') ||
+          extractedInfo.topic === 'Visual Analysis Unavailable'
+        );
         const updatedDoc: DocumentItem = {
           ...activeDocument,
           rawText: text,
-          extractedInfo
+          extractedInfo,
+          status: isVisionFailed ? 'failed' : 'processed'
         };
         setActiveDocument(updatedDoc);
         setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
@@ -368,6 +393,7 @@ export const App: React.FC = () => {
               onSelectDocument={setActiveDocument}
               onCreateProject={handleCreateProject}
               onNavigatePage={setActivePage}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
           )}
 

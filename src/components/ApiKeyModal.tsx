@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ApiSettings } from '../types';
-import { Key, ShieldCheck, X, Cpu } from 'lucide-react';
+import { Key, ShieldCheck, X, Cpu, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -19,14 +19,77 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   const [apiKey, setApiKey] = useState(apiSettings.apiKey);
   const [modelName, setModelName] = useState(apiSettings.modelName);
 
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ status: 'idle' | 'success' | 'error'; message: string }>({
+    status: 'idle',
+    message: ''
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      setProvider(apiSettings.provider);
+      setApiKey(apiSettings.apiKey);
+      setModelName(apiSettings.modelName);
+      setTestResult({ status: 'idle', message: '' });
+    }
+  }, [isOpen, apiSettings]);
+
   if (!isOpen) return null;
 
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult({ status: 'idle', message: '' });
+
+    if (provider === 'mock') {
+      setIsTesting(false);
+      setTestResult({ status: 'success', message: 'Built-in RAG Intelligence Engine active.' });
+      return;
+    }
+
+    if (!apiKey || !apiKey.trim()) {
+      setIsTesting(false);
+      setTestResult({ status: 'error', message: 'API Key is required to test connection.' });
+      return;
+    }
+
+    try {
+      if (provider === 'openai') {
+        const res = await fetch('https://api.openai.com/v1/models', {
+          headers: { Authorization: `Bearer ${apiKey.trim()}` }
+        });
+        if (res.ok) {
+          setTestResult({ status: 'success', message: 'Connection Successful! OpenAI API is valid & reachable.' });
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          setTestResult({ status: 'error', message: `OpenAI Error (${res.status}): ${errData?.error?.message || 'Invalid API key or network error'}` });
+        }
+      } else if (provider === 'gemini') {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`);
+        if (res.ok) {
+          setTestResult({ status: 'success', message: 'Connection Successful! Gemini API is valid & reachable.' });
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          setTestResult({ status: 'error', message: `Gemini Error (${res.status}): ${errData?.error?.message || 'Invalid API key'}` });
+        }
+      } else {
+        setTestResult({ status: 'success', message: `Configured provider: ${provider}` });
+      }
+    } catch (err: any) {
+      setTestResult({ status: 'error', message: `Network error testing connection: ${err?.message || 'Failed'}` });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   const handleSave = () => {
-    onSaveSettings({
+    const finalModel = modelName || (provider === 'openai' ? 'gpt-4o-mini' : provider === 'gemini' ? 'gemini-1.5-flash' : 'mock-engine');
+    const newSettings: ApiSettings = {
       provider,
-      apiKey,
-      modelName: modelName || (provider === 'openai' ? 'gpt-4o-mini' : provider === 'gemini' ? 'gemini-1.5-flash' : 'mock-engine')
-    });
+      apiKey: apiKey.trim(),
+      modelName: finalModel,
+      apiUrl: apiSettings.apiUrl || 'http://localhost:8000'
+    };
+    onSaveSettings(newSettings);
     onClose();
   };
 
@@ -74,7 +137,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="sk-..."
-                  className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-slate-200 outline-none"
+                  className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-slate-200 outline-none font-mono"
                 />
               </div>
 
@@ -88,6 +151,42 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-slate-200 outline-none"
                 />
               </div>
+
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={isTesting}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 flex items-center space-x-1.5 transition cursor-pointer"
+                >
+                  {isTesting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                      <span>Testing Connection...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Test API Connection</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {testResult.status !== 'idle' && (
+                <div className={`p-3 rounded-xl border text-xs flex items-start space-x-2 ${
+                  testResult.status === 'success'
+                    ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200'
+                    : 'bg-rose-950/60 border-rose-500/40 text-rose-200'
+                }`}>
+                  {testResult.status === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <span>{testResult.message}</span>
+                </div>
+              )}
             </>
           )}
 
@@ -109,7 +208,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           </button>
           <button
             onClick={handleSave}
-            className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md"
+            className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md cursor-pointer"
           >
             Save Settings
           </button>
@@ -118,3 +217,4 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     </div>
   );
 };
+

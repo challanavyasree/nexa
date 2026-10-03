@@ -83,6 +83,11 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
       const { text, fileType } = await processUploadedFile(file, apiSettings);
       const extractedInfo = extractStructuredInfoFromText(text, fileType, file.name);
 
+      const isVisionFailed = fileType === 'image' && (
+        text.includes('Visual understanding unavailable') ||
+        extractedInfo.topic === 'Visual Analysis Unavailable'
+      );
+
       const newDoc: DocumentItem = {
         id: `doc-${Date.now()}`,
         projectId: activeDocument?.projectId || `proj-${Date.now()}`,
@@ -90,7 +95,7 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
         fileType,
         size: `${(file.size / 1024).toFixed(1)} KB`,
         uploadTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'processed',
+        status: isVisionFailed ? 'failed' : 'processed',
         rawText: text,
         extractedInfo,
         _rawFile: file
@@ -108,7 +113,11 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
   };
 
   const currentDoc = uploadedDoc || activeDocument;
-  const isImageUnavail = currentDoc?.fileType === 'image' && (currentDoc.rawText.includes('Visual understanding unavailable') || currentDoc.extractedInfo?.topic === 'Visual Analysis Unavailable');
+  const isImageUnavail = currentDoc?.fileType === 'image' && (
+    currentDoc.status === 'failed' ||
+    currentDoc.rawText.includes('Visual understanding unavailable') ||
+    currentDoc.extractedInfo?.topic === 'Visual Analysis Unavailable'
+  );
 
   // Run AI Multi-Agent Generation
   const handleStartGeneration = async () => {
@@ -548,7 +557,11 @@ export const GenerateView: React.FC<GenerateViewProps> = ({
                     <FileText className="w-4 h-4 text-sky-400 shrink-0" />
                     <span className="truncate">{currentDoc.name}</span>
                   </span>
-                  <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-500/20 text-emerald-400 rounded uppercase shrink-0">
+                  <span className={`px-2 py-0.5 text-[9px] font-bold rounded uppercase shrink-0 ${
+                    currentDoc.status === 'processed'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                  }`}>
                     {currentDoc.status}
                   </span>
                 </div>

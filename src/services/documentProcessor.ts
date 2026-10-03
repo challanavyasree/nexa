@@ -97,6 +97,27 @@ export const processUploadedFile = async (
   else if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.webp')) fileType = 'image';
   else if (fileName.endsWith('.mp4') || fileName.endsWith('.webm') || fileName.endsWith('.mov') || fileName.endsWith('.avi')) fileType = 'video';
 
+  // Resolve active API configuration from param or localStorage fallback
+  let activeApiSettings = apiSettings;
+  if (!activeApiSettings?.apiKey) {
+    try {
+      const saved = localStorage.getItem('nexa_api_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.apiKey) {
+          activeApiSettings = parsed;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Safe diagnostic log (NEVER PRINT API KEY)
+  console.log('VISION_CONFIG_CHECK', {
+    visionConfigured: Boolean(activeApiSettings?.apiKey),
+    provider: activeApiSettings?.provider || 'none',
+    model: activeApiSettings?.modelName || 'none'
+  });
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -112,9 +133,9 @@ export const processUploadedFile = async (
         const dataUrl = reader.result as string;
 
         // Trace & call Vision API if API Key is configured
-        if (apiSettings?.apiKey) {
+        if (activeApiSettings?.apiKey) {
           try {
-            const visionText = await callVisionAPI(dataUrl, apiSettings, file.name);
+            const visionText = await callVisionAPI(dataUrl, activeApiSettings, file.name);
             const formattedText = `EXTRACTED MULTIMODAL INTELLIGENCE
 
 CONTENT UNDERSTANDING
@@ -196,7 +217,45 @@ Location / Setting: [Visually inferable setting, e.g. Outdoor Seashore / Coastal
 Text Detected (OCR): [Extract any visible text from the image, or 'No visible text detected']
 Important Observations: [Key semantic insights from this image]`;
 
-  if (apiSettings.provider === 'openai' || apiSettings.apiKey) {
+  if (apiSettings.provider === 'gemini') {
+    // Google Gemini API call
+    const base64Data = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+    const mimeType = dataUrl.substring(dataUrl.indexOf(':') + 1, dataUrl.indexOf(';')) || 'image/png';
+    const model = apiSettings.modelName || 'gemini-1.5-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiSettings.apiKey}`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: promptText },
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ]
+      })
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(`Gemini Vision API error (${res.status}): ${errJson?.error?.message || 'Request failed'}`);
+    }
+
+    const data = await res.json();
+    const visionText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (visionText && visionText.length > 20) {
+      return visionText;
+    }
+  } else {
+    // Default to OpenAI / OpenAI-compatible endpoint
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -223,7 +282,7 @@ Important Observations: [Key semantic insights from this image]`;
     }
 
     const data = await res.json();
-    const visionContent = data.choices[0]?.message?.content;
+    const visionContent = data.choices?.[0]?.message?.content;
     if (visionContent && visionContent.length > 20) {
       return visionContent;
     }
