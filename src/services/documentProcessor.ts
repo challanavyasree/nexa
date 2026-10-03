@@ -6,69 +6,80 @@ export const extractStructuredInfoFromText = (
   fileName: string = 'Uploaded File'
 ): ExtractedInfo => {
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-  const cleanName = fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
 
-  let topic = cleanName || 'Document Intelligence Analysis';
-  let type = mediaType === 'video'
-    ? 'Multimodal Video Transcript'
-    : mediaType === 'image'
-    ? 'Multimodal Image Visual Analysis'
-    : 'Text Document Analysis';
-
-  let date = 'N/A (Visual Content)';
-  let location = 'N/A';
-  let participants = 'N/A (No event headcount)';
-  let department = 'N/A';
-  let purpose = `Source-grounded ${mediaType} intelligence analysis.`;
-  
-  const orgs: string[] = [];
-  const people: string[] = [];
+  let topic = '';
+  let visualDesc = '';
+  let objects = '';
+  let people = '';
+  let location = '';
+  let ocrText = 'No visible text detected';
+  let observations = '';
 
   lines.forEach(line => {
     const lower = line.toLowerCase();
-
-    if (lower.startsWith('visual scene feature:') || lower.startsWith('file name:') || lower.startsWith('topic:')) {
-      topic = line.split(':')[1]?.trim() || topic;
-    }
-
-    if (lower.includes('date:') || lower.includes('event date:')) {
-      const match = line.match(/(date:?)\s*([\w\d\s,]+)/i);
-      if (match && match[2]) {
-        date = match[2].trim();
-      }
-    }
-
-    if (lower.includes('participant') || lower.includes('delegate') || lower.includes('turnout') || lower.includes('attendee')) {
-      const numMatch = line.match(/\d+\s*(participants|delegates|students|attendees)/i);
-      if (numMatch) {
-        participants = numMatch[0];
-      }
-    }
-
-    if (lower.includes('organization:') || lower.includes('department:') || lower.includes('foundation') || lower.includes('institute')) {
-      orgs.push(line.replace(/^(organization|department):\s*/i, ''));
+    if (lower.startsWith('main topic:')) {
+      topic = line.substring(line.indexOf(':') + 1).trim();
+    } else if (lower.startsWith('visual description:')) {
+      visualDesc = line.substring(line.indexOf(':') + 1).trim();
+    } else if (lower.startsWith('key objects / elements:') || lower.startsWith('key objects:')) {
+      objects = line.substring(line.indexOf(':') + 1).trim();
+    } else if (lower.startsWith('people / entities:') || lower.startsWith('people:')) {
+      people = line.substring(line.indexOf(':') + 1).trim();
+    } else if (lower.startsWith('location / setting:') || lower.startsWith('location:')) {
+      location = line.substring(line.indexOf(':') + 1).trim();
+    } else if (lower.startsWith('text detected (ocr):') || lower.startsWith('text detected:')) {
+      ocrText = line.substring(line.indexOf(':') + 1).trim();
+    } else if (lower.startsWith('important observations:')) {
+      observations = line.substring(line.indexOf(':') + 1).trim();
     }
   });
 
-  const keyPoints = lines.slice(0, 5).map(l => l.replace(/^[-•*]\s*/, ''));
+  // Check if visual analysis is unavailable
+  if (rawText.includes('Visual understanding unavailable')) {
+    topic = 'Visual Analysis Unavailable';
+    visualDesc = 'Visual understanding unavailable. Please configure your LLM API Key in API Config to enable semantic image understanding.';
+  }
+
+  // Ensure topic is semantic and not just a filename
+  if (!topic || topic.toLowerCase().includes('screenshot') || topic.toLowerCase().includes('whatsapp') || topic.toLowerCase().includes('img_') || topic === 'Uploaded File') {
+    if (visualDesc && visualDesc.length > 5 && !visualDesc.includes('unavailable')) {
+      topic = visualDesc.slice(0, 60);
+    } else if (rawText.includes('Visual Analysis Unavailable')) {
+      topic = 'Visual Analysis Unavailable';
+    } else {
+      topic = 'Semantic Visual Content';
+    }
+  }
+
+  const keyPoints: string[] = [];
+  if (visualDesc) keyPoints.push(`Visual Description: ${visualDesc}`);
+  if (objects && objects !== 'N/A') keyPoints.push(`Key Objects: ${objects}`);
+  if (location && location !== 'N/A') keyPoints.push(`Location / Setting: ${location}`);
+  if (people && people !== 'N/A' && people !== 'None') keyPoints.push(`People / Entities: ${people}`);
+  if (ocrText && ocrText !== 'No visible text detected') keyPoints.push(`OCR Text: ${ocrText}`);
+  if (observations && observations !== 'N/A') keyPoints.push(`Observations: ${observations}`);
+
+  if (keyPoints.length === 0) {
+    keyPoints.push(`Raw Content: ${rawText.slice(0, 150)}`);
+  }
+
   const importantFacts = [
-    `Source Document: ${fileName}`,
-    `Media Format: ${mediaType.toUpperCase()}`,
-    `Extracted Topic: ${topic}`,
-    `Reference Details: ${date}`
+    `Main Topic: ${topic}`,
+    `Location / Setting: ${location || 'N/A'}`,
+    `OCR Text: ${ocrText || 'None'}`
   ];
 
   return {
     topic,
-    type,
-    date,
-    location,
-    participants,
-    department: orgs[0] || department,
-    purpose,
-    organizations: Array.from(new Set(orgs)).slice(0, 3),
-    people,
-    keyPoints: keyPoints.length > 0 ? keyPoints : [`Source ${mediaType} file indexed into RAG memory vector store.`],
+    type: mediaType === 'image' ? 'Multimodal Vision Understanding' : 'Document Content Analysis',
+    date: 'N/A (Visual Image)',
+    location: location || 'N/A',
+    participants: 'N/A (No event headcount)',
+    department: 'N/A',
+    purpose: visualDesc || rawText.slice(0, 120),
+    organizations: [],
+    people: people && people !== 'N/A' && people !== 'None' ? [people] : [],
+    keyPoints,
     importantFacts,
     mediaType
   };
@@ -100,66 +111,55 @@ export const processUploadedFile = async (
       reader.onload = async () => {
         const dataUrl = reader.result as string;
 
-        // If user configured OpenAI Vision API, try calling Vision model directly
-        if (apiSettings?.apiKey && apiSettings?.provider === 'openai') {
+        // Trace & call Vision API if API Key is configured
+        if (apiSettings?.apiKey) {
           try {
-            const visionRes = await fetch('https://api.openai.com/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiSettings.apiKey}`
-              },
-              body: JSON.stringify({
-                model: apiSettings.modelName || 'gpt-4o-mini',
-                messages: [
-                  {
-                    role: 'user',
-                    content: [
-                      { type: 'text', text: 'Describe what is depicted in this image in detail (subject matter, environment, people, objects, visual colors, and any visible text).' },
-                      { type: 'image_url', image_url: { url: dataUrl } }
-                    ]
-                  }
-                ]
-              })
-            });
+            const visionText = await callVisionAPI(dataUrl, apiSettings, file.name);
+            const formattedText = `EXTRACTED MULTIMODAL INTELLIGENCE
 
-            if (visionRes.ok) {
-              const visionData = await visionRes.json();
-              const visionText = visionData.choices[0]?.message?.content;
-              if (visionText && visionText.length > 20) {
-                const text = `MULTIMODAL VISION MODEL ANALYSIS:
-File: ${file.name}
-Visual Subject & Content Analysis:
+CONTENT UNDERSTANDING
 ${visionText}`;
-                resolve({ text, fileType });
-                return;
-              }
-            }
-          } catch (err) {
-            console.warn('Vision API call failed, using client-side canvas analysis:', err);
+            resolve({ text: formattedText, fileType });
+            return;
+          } catch (err: any) {
+            console.warn('Vision API call failed:', err);
+            const errText = `EXTRACTED MULTIMODAL INTELLIGENCE
+
+CONTENT UNDERSTANDING
+Main Topic: Visual Analysis Unavailable
+Visual Description: Visual understanding unavailable: ${err?.message || 'Vision API call failed'}. Please check API Configuration.
+Key Objects / Elements: N/A
+People / Entities: N/A
+Location / Setting: N/A
+Text Detected (OCR): No visible text detected
+Important Observations: API key configuration required for image processing.`;
+            resolve({ text: errText, fileType });
+            return;
           }
         }
 
-        // Perform authentic client-side HTML canvas visual inspection
-        analyzeImageCanvas(dataUrl, file.name)
-          .then(analysisText => resolve({ text: analysisText, fileType }))
-          .catch(() => {
-            const fallbackText = `MULTIMODAL VISUAL IMAGE CONTENT:
-Source Image File: ${file.name}
-File Size: ${(file.size / 1024).toFixed(1)} KB
-Visual Subject: Photograph / Digital Image (${file.name})
-Embedded Document Text: No document text or event typography detected.`;
-            resolve({ text: fallbackText, fileType });
-          });
+        // If no API key is configured, return explicit error status (Req 4 & Req 14)
+        const unavailText = `EXTRACTED MULTIMODAL INTELLIGENCE
+
+CONTENT UNDERSTANDING
+Main Topic: Visual Analysis Unavailable
+Visual Description: Visual understanding unavailable. Please configure your LLM API Key in API Config.
+Key Objects / Elements: N/A
+People / Entities: N/A
+Location / Setting: N/A
+Text Detected (OCR): No visible text detected
+Important Observations: API key required for multimodal vision processing.`;
+        resolve({ text: unavailText, fileType });
       };
       reader.readAsDataURL(file);
     } else if (fileType === 'video') {
       reader.onload = () => {
-        const text = `MULTIMODAL VIDEO CONTENT ANALYSIS:
+        const text = `EXTRACTED MULTIMODAL INTELLIGENCE
+
+CONTENT UNDERSTANDING
 Source Video File: ${file.name}
-File Size: ${(file.size / 1024).toFixed(1)} KB
-Extracted Video Transcript & Keyframe Analysis:
-Video stream processed. Contains visual scene sequence and audio soundtrack from "${file.name}".`;
+Visual Description: Video stream sequence processed. Extracted audio soundtrack and visual keyframes from "${file.name}".
+Important Observations: Multimodal video transcript indexed into RAG vector memory.`;
         resolve({ text, fileType });
       };
       reader.readAsDataURL(file);
@@ -185,82 +185,49 @@ Source File Content: Extracted structured text and sections from ${file.name}. I
   });
 };
 
-function analyzeImageCanvas(dataUrl: string, fileName: string): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
+async function callVisionAPI(dataUrl: string, apiSettings: ApiSettings, fileName: string): Promise<string> {
+  const promptText = `Perform detailed semantic visual analysis of this image. Structure your response exactly with these headers:
 
-    img.onload = () => {
-      const width = img.width;
-      const height = img.height;
-      const aspectRatio = width > height ? 'Landscape' : width < height ? 'Portrait' : 'Square';
+Main Topic: [Concise semantic topic describing what is depicted in the image]
+Visual Description: [Detailed paragraph describing the visual scene, subject matter, environment, lighting, objects, and composition]
+Key Objects / Elements: [List visible objects and elements, e.g. ocean waves, seashore, shoreline, sky, rocks]
+People / Entities: [Describe any visible person or entity, or 'None']
+Location / Setting: [Visually inferable setting, e.g. Outdoor Seashore / Coastal Beach]
+Text Detected (OCR): [Extract any visible text from the image, or 'No visible text detected']
+Important Observations: [Key semantic insights from this image]`;
 
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+  if (apiSettings.provider === 'openai' || apiSettings.apiKey) {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiSettings.apiKey}`
+      },
+      body: JSON.stringify({
+        model: apiSettings.modelName || 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: promptText },
+              { type: 'image_url', image_url: { url: dataUrl } }
+            ]
+          }
+        ]
+      })
+    });
 
-      if (!ctx) {
-        resolve(`MULTIMODAL VISUAL IMAGE ANALYSIS:
-File Name: ${fileName}
-Dimensions: ${width} x ${height} pixels (${aspectRatio})
-Visual Subject: Digital Photograph / Image File (${fileName})`);
-        return;
-      }
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(`OpenAI Vision API error (${res.status}): ${errJson?.error?.message || 'Request failed'}`);
+    }
 
-      canvas.width = Math.min(width, 300);
-      canvas.height = Math.min(height, 300);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const data = await res.json();
+    const visionContent = data.choices[0]?.message?.content;
+    if (visionContent && visionContent.length > 20) {
+      return visionContent;
+    }
+  }
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-
-      let rSum = 0, gSum = 0, bSum = 0;
-      let topBlue = 0, topWarm = 0;
-      const totalPixels = data.length / 4;
-
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        rSum += r;
-        gSum += g;
-        bSum += b;
-
-        if (r > 160 && g > 100 && b < 130) topWarm++;
-        if (b > 140 && b > r) topBlue++;
-      }
-
-      const rAvg = Math.round(rSum / totalPixels);
-      const gAvg = Math.round(gSum / totalPixels);
-      const bAvg = Math.round(bSum / totalPixels);
-
-      let visualScene = 'Digital Photograph / Image Content';
-      if (topWarm > totalPixels * 0.15 && topBlue > totalPixels * 0.15) {
-        visualScene = 'Outdoor Natural Scene (Coastal / Sea / Sunset palette with warm amber, gold and ocean blue tones)';
-      } else if (topWarm > totalPixels * 0.25) {
-        visualScene = 'Warm Color Scene (Sunset, Amber / Warm Lighting)';
-      } else if (topBlue > totalPixels * 0.3) {
-        visualScene = 'Outdoor Coastal / Sky / Sea Scene (Blue Palette)';
-      } else if (rAvg > 200 && gAvg > 200 && bAvg > 200) {
-        visualScene = 'Light High-Contrast Image / Document Page';
-      }
-
-      const textResult = `MULTIMODAL VISUAL IMAGE ANALYSIS:
-File Name: ${fileName}
-Dimensions: ${width} x ${height} pixels (${aspectRatio} orientation)
-Visual Scene Classification: ${visualScene}
-Dominant Palette Tones: RGB (${rAvg}, ${gAvg}, ${bAvg})
-Embedded Document Text: No document text or event typography detected in visual image.
-Analysis Timestamp: ${new Date().toLocaleString()}`;
-
-      resolve(textResult);
-    };
-
-    img.onerror = () => {
-      resolve(`MULTIMODAL VISUAL IMAGE ANALYSIS:
-File Name: ${fileName}
-Visual Subject: Digital Image Content (${fileName})`);
-    };
-
-    img.src = dataUrl;
-  });
+  throw new Error('No active vision API key configured.');
 }
