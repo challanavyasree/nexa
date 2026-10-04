@@ -37,7 +37,7 @@ export const extractStructuredInfoFromText = (
   // Check if visual analysis is unavailable
   if (rawText.includes('Visual understanding unavailable')) {
     topic = 'Visual Analysis Unavailable';
-    visualDesc = 'Visual understanding unavailable. Please configure your LLM API Key in API Config to enable semantic image understanding.';
+    visualDesc = 'Visual understanding unavailable. Please configure GEMINI_API_KEY in server/.env to enable semantic image understanding.';
   }
 
   // Ensure topic is semantic and not just a filename
@@ -97,27 +97,6 @@ export const processUploadedFile = async (
   else if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.webp')) fileType = 'image';
   else if (fileName.endsWith('.mp4') || fileName.endsWith('.webm') || fileName.endsWith('.mov') || fileName.endsWith('.avi')) fileType = 'video';
 
-  // Resolve active API configuration from param or localStorage fallback
-  let activeApiSettings = apiSettings;
-  if (!activeApiSettings?.apiKey) {
-    try {
-      const saved = localStorage.getItem('nexa_api_settings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object' && parsed.apiKey) {
-          activeApiSettings = parsed;
-        }
-      }
-    } catch (e) {}
-  }
-
-  // Safe diagnostic log (NEVER PRINT API KEY)
-  console.log('VISION_CONFIG_CHECK', {
-    visionConfigured: Boolean(activeApiSettings?.apiKey),
-    provider: activeApiSettings?.provider || 'none',
-    model: activeApiSettings?.modelName || 'none'
-  });
-
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -132,45 +111,43 @@ export const processUploadedFile = async (
       reader.onload = async () => {
         const dataUrl = reader.result as string;
 
-        // Trace & call Vision API if API Key is configured
-        if (activeApiSettings?.apiKey) {
-          try {
-            const visionText = await callVisionAPI(dataUrl, activeApiSettings, file.name);
-            const formattedText = `EXTRACTED MULTIMODAL INTELLIGENCE
+        try {
+          // Route image analysis through FastAPI backend (Requirements B, E, F)
+          const res = await fetch('http://localhost:8000/api/vision/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageDataUrl: dataUrl,
+              fileName: file.name
+            })
+          });
 
-CONTENT UNDERSTANDING
-${visionText}`;
-            resolve({ text: formattedText, fileType });
-            return;
-          } catch (err: any) {
-            console.warn('Vision API call failed:', err);
-            const errText = `EXTRACTED MULTIMODAL INTELLIGENCE
-
-CONTENT UNDERSTANDING
-Main Topic: Visual Analysis Unavailable
-Visual Description: Visual understanding unavailable: ${err?.message || 'Vision API call failed'}. Please check API Configuration.
-Key Objects / Elements: N/A
-People / Entities: N/A
-Location / Setting: N/A
-Text Detected (OCR): No visible text detected
-Important Observations: API key configuration required for image processing.`;
-            resolve({ text: errText, fileType });
-            return;
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData?.detail || `Backend vision API error (${res.status})`);
           }
-        }
 
-        // If no API key is configured, return explicit error status (Req 4 & Req 14)
-        const unavailText = `EXTRACTED MULTIMODAL INTELLIGENCE
+          const data = await res.json();
+          resolve({
+            text: data.text || data.rawText,
+            fileType: 'image'
+          });
+          return;
+        } catch (err: any) {
+          console.warn('Backend Vision API call failed:', err);
+          const errText = `EXTRACTED MULTIMODAL INTELLIGENCE
 
 CONTENT UNDERSTANDING
 Main Topic: Visual Analysis Unavailable
-Visual Description: Visual understanding unavailable. Please configure your LLM API Key in API Config.
+Visual Description: Visual understanding unavailable: ${err?.message || 'Backend vision service unavailable'}. Please check server/.env API key configuration.
 Key Objects / Elements: N/A
 People / Entities: N/A
 Location / Setting: N/A
 Text Detected (OCR): No visible text detected
-Important Observations: API key required for multimodal vision processing.`;
-        resolve({ text: unavailText, fileType });
+Important Observations: Gemini API key required in server/.env for multimodal vision processing.`;
+          resolve({ text: errText, fileType });
+          return;
+        }
       };
       reader.readAsDataURL(file);
     } else if (fileType === 'video') {
@@ -205,88 +182,3 @@ Source File Content: Extracted structured text and sections from ${file.name}. I
     }
   });
 };
-
-async function callVisionAPI(dataUrl: string, apiSettings: ApiSettings, fileName: string): Promise<string> {
-  const promptText = `Perform detailed semantic visual analysis of this image. Structure your response exactly with these headers:
-
-Main Topic: [Concise semantic topic describing what is depicted in the image]
-Visual Description: [Detailed paragraph describing the visual scene, subject matter, environment, lighting, objects, and composition]
-Key Objects / Elements: [List visible objects and elements, e.g. ocean waves, seashore, shoreline, sky, rocks]
-People / Entities: [Describe any visible person or entity, or 'None']
-Location / Setting: [Visually inferable setting, e.g. Outdoor Seashore / Coastal Beach]
-Text Detected (OCR): [Extract any visible text from the image, or 'No visible text detected']
-Important Observations: [Key semantic insights from this image]`;
-
-  if (apiSettings.provider === 'gemini') {
-    // Google Gemini API call
-    const base64Data = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-    const mimeType = dataUrl.substring(dataUrl.indexOf(':') + 1, dataUrl.indexOf(';')) || 'image/png';
-    const model = apiSettings.modelName || 'gemini-1.5-flash';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiSettings.apiKey}`;
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: promptText },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64Data
-                }
-              }
-            ]
-          }
-        ]
-      })
-    });
-
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(`Gemini Vision API error (${res.status}): ${errJson?.error?.message || 'Request failed'}`);
-    }
-
-    const data = await res.json();
-    const visionText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (visionText && visionText.length > 20) {
-      return visionText;
-    }
-  } else {
-    // Default to OpenAI / OpenAI-compatible endpoint
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiSettings.apiKey}`
-      },
-      body: JSON.stringify({
-        model: apiSettings.modelName || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: promptText },
-              { type: 'image_url', image_url: { url: dataUrl } }
-            ]
-          }
-        ]
-      })
-    });
-
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(`OpenAI Vision API error (${res.status}): ${errJson?.error?.message || 'Request failed'}`);
-    }
-
-    const data = await res.json();
-    const visionContent = data.choices?.[0]?.message?.content;
-    if (visionContent && visionContent.length > 20) {
-      return visionContent;
-    }
-  }
-
-  throw new Error('No active vision API key configured.');
-}

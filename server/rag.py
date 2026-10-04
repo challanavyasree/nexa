@@ -33,9 +33,6 @@ def similarity_search(chunks: List[Dict[str, Any]], query: str, doc_name: str) -
             if term in text_lower:
                 score += 1.0
 
-        if "500" in text_lower or "300" in text_lower or "november" in text_lower or "october" in text_lower:
-            score += 2.0
-
         results.append({"chunk": chunk, "score": score})
 
     results.sort(key=lambda x: x["score"], reverse=True)
